@@ -11,16 +11,18 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use directories::ProjectDirs;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{
-    io,
+    fs, io,
+    path::PathBuf,
     time::{Duration, Instant},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize app with database
-    let db_path = "todos.db";
-    let mut app = match App::new(db_path) {
+    let db_path = get_database_path()?;
+    let mut app = match App::new(db_path.to_str().unwrap()) {
         Ok(app) => app,
         Err(e) => {
             eprintln!("Failed to initialize database: {}", e);
@@ -160,4 +162,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+fn get_database_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let proj_dirs = ProjectDirs::from("com", "auxilia", "r_todo")
+        .ok_or("Failed to determine project directories")?;
+
+    let data_dir = proj_dirs.data_dir();
+    fs::create_dir_all(data_dir)?;
+
+    Ok(data_dir.join("todos.db"))
 }
