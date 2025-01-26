@@ -1,180 +1,163 @@
-use std::{
-    fs,
-    io::{self, stdout, Write},
-};
+mod app;
+mod db;
+mod models;
 
+use app::{
+    state::{App, InputMode},
+    ui,
+};
 use crossterm::{
-    cursor,
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    style::{Color, Print, SetForegroundColor},
-    terminal::{self, ClearType},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use serde::{Deserialize, Serialize};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
-#[derive(Serialize, Deserialize)]
-struct ToDo {
-    title: String,
-    completed: bool,
-}
-
-struct App {
-    todos: Vec<ToDo>,
-    selected: usize,
-    input_mode: bool,
-    current_input: String,
-}
-
-impl App {
-    fn new() -> Self {
-        Self {
-            todos: Vec::new(),
-            selected: 0,
-            input_mode: false,
-            current_input: String::new(),
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // initialize app with database
+    let db_path = "todos.db";
+    let mut app = match App::new(db_path) {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("Failed to initialize database: {}", e);
+            return Err(e);
         }
-    }
-
-    fn load_todos() -> Vec<ToDo> {
-        match fs::read_to_string("todos.json") {
-            Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
-            Err(_) => Vec::new(),
-        }
-    }
-
-    fn add_todo(&mut self, title: String) {
-        self.todos.push(ToDo {
-            title,
-            completed: false,
-        });
-        self.save_todos().unwrap_or_default();
-    }
-
-    fn toggle_selected(&mut self) {
-        if let Some(todo) = self.todos.get_mut(self.selected) {
-            todo.completed = !todo.completed;
-            self.save_todos().unwrap_or_default();
-        }
-    }
-
-    fn delete_selected(&mut self) {
-        if !self.todos.is_empty() {
-            self.todos.remove(self.selected);
-            if self.selected >= self.todos.len() && !self.todos.is_empty() {
-                self.selected = self.todos.len() - 1;
-            }
-            self.save_todos().unwrap_or_default();
-        }
-    }
-
-    fn save_todos(&self) -> io::Result<()> {
-        let json = serde_json::to_string(&self.todos)?;
-        fs::write("todos.json", json)
-    }
-}
-
-fn main() -> io::Result<()> {
-    // set up terminal
-    let _ = terminal::enable_raw_mode();
-    let mut stdout = stdout();
-    execute!(stdout, terminal::EnterAlternateScreen)?;
-
-    let mut app = App {
-        todos: App::load_todos(),
-        selected: 0,
-        input_mode: false,
-        current_input: String::new(),
     };
 
+    // setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut last_tick = Instant::now();
+    let tick_rate = Duration::from_millis(20);
+
     loop {
-        // clear screen
-        execute!(
-            stdout,
-            terminal::Clear(ClearType::All),
-            cursor::MoveTo(0, 0),
-            SetForegroundColor(Color::White),
-            Print("ToDo list (q to quit, n for new, space to toggle, d to delete)\n\n")
-        )?;
+        // Draw the current state
+        terminal.draw(|f| ui::render(f, &app))?;
 
-        // draw todos
-        let mut current_line = 2u16;
-        for (i, todo) in app.todos.iter().enumerate() {
-            let prefix = if i == app.selected { "> " } else { " " };
-            let checkmark = if todo.completed { "[x]" } else { "[ ] " };
+        let timeout = tick_rate
+            .checked_sub(last_tick.elapsed())
+            .unwrap_or_else(|| Duration::from_secs(0));
 
-            execute!(
-                stdout,
-                cursor::MoveTo(0, current_line),
-                SetForegroundColor(if todo.completed {
-                    Color::Green
-                } else {
-                    Color::White
-                }),
-                Print(format!("{}{} {}\n", prefix, checkmark, todo.title))
-            )?;
+        if event::poll(timeout)? {
+            if let Event::Key(key) = event::read()? {
+                match app.input_mode {
+                    InputMode::Normal => match key.code {
+                        KeyCode::Char('q') => break,
+                        KeyCode::Char('h') => app.show_help = !app.show_help,
+                        KeyCode::Char('e') => {
+                            if let Some(selected) = app.selected_index {
+                                if let Some(todo) = app.todos.get(selected) {
+                                    app.input = todo.text.clone();
+                                    app.input_mode = InputMode::Editing;
+                                }
+                            }
+                        }
+                        KeyCode::Char('n') => {
+                            app.input_mode = InputMode::Editing;
+                            app.input.clear();
+                        }
+                        KeyCode::Char('d') => {
+                            if let Some(selected) = app.selected_index {
+                                if let Err(e) = app.delete_todo(selected) {
+                                    app.set_error(format!("Failed to delete todo: {}", e));
+                                }
+                            }
+                        }
+                        KeyCode::Char('c') => {
+                            if let Err(e) = app.clear_completed() {
+                                app.set_error(format!("Failed to clear completed todos: {}", e));
+                            }
+                        }
+                        KeyCode::Char(' ') => {
+                            if let Some(selected) = app.selected_index {
+                                if let Err(e) = app.toggle_todo(selected) {
+                                    app.set_error(format!("Failed to toggle todo: {}", e));
+                                }
+                            }
+                        }
+                        KeyCode::Char('k') => {
+                            app.selected_index = match app.selected_index {
+                                Some(i) => {
+                                    if i > 0 {
+                                        Some(i - 1)
+                                    } else {
+                                        Some(app.todos.len() - 1)
+                                    }
+                                }
+                                None => Some(0),
+                            }
+                        }
+                        KeyCode::Char('j') => {
+                            app.selected_index = match app.selected_index {
+                                Some(i) => {
+                                    if i + 1 < app.todos.len() {
+                                        Some(i + 1)
+                                    } else {
+                                        Some(0)
+                                    }
+                                }
+                                None => Some(0),
+                            };
+                        }
+                        _ => {}
+                    },
+                    InputMode::Editing => match key.code {
+                        KeyCode::Enter => {
+                            if !app.input.is_empty() {
+                                if let Some(selected) = app.selected_index {
+                                    if let Err(e) =
+                                        app.update_todo_text(selected, app.input.clone())
+                                    {
+                                        app.set_error(format!("Failed to update todo: {}", e));
+                                    }
+                                } else {
+                                    if let Err(e) = app.add_todo(app.input.clone()) {
+                                        app.set_error(format!("Failed to add todo: {}", e));
+                                    }
+                                }
 
-            current_line += 1;
-        }
-
-        // draw input line if in input mode
-        if app.input_mode {
-            execute!(
-                stdout,
-                cursor::MoveTo(0, current_line + 1),
-                SetForegroundColor(Color::Yellow),
-                Print("New ToDo: "),
-                Print(&app.current_input)
-            )?;
-        }
-
-        stdout.flush()?;
-
-        // handle keyboard input
-        if let Event::Key(KeyEvent { code, .. }) = event::read()? {
-            match code {
-                // mode and toggle
-                KeyCode::Char('q') if !app.input_mode => break,
-                KeyCode::Char('n') if !app.input_mode => {
-                    app.input_mode = true;
+                                app.input.clear();
+                                app.input_mode = InputMode::Normal;
+                                terminal.clear()?;
+                            }
+                        }
+                        KeyCode::Char(c) => {
+                            app.input.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            app.input.pop();
+                        }
+                        KeyCode::Esc => {
+                            app.input.clear();
+                            app.input_mode = InputMode::Normal;
+                        }
+                        _ => {}
+                    },
                 }
-                KeyCode::Char(' ') if !app.input_mode => app.toggle_selected(),
-                KeyCode::Char('d') if !app.input_mode => app.delete_selected(),
-
-                // input mode
-                KeyCode::Char(c) if app.input_mode => app.current_input.push(c),
-                KeyCode::Backspace if app.input_mode => {
-                    let _ = app.current_input.pop();
-                }
-                KeyCode::Enter if app.input_mode => {
-                    if !app.current_input.is_empty() {
-                        app.add_todo(app.current_input.clone());
-                        app.current_input.clear();
-                        app.input_mode = false;
-                    }
-                }
-                KeyCode::Esc if app.input_mode => {
-                    app.current_input.clear();
-                    app.input_mode = false;
-                }
-
-                // navigation keys
-                KeyCode::Char('k') if !app.input_mode => {
-                    if app.selected > 0 {
-                        app.selected -= 1;
-                    }
-                }
-                KeyCode::Char('j') if !app.input_mode => {
-                    if !app.todos.is_empty() && app.selected < app.todos.len() - 1 {
-                        app.selected += 1;
-                    }
-                }
-                _ => {}
             }
+        }
+
+        if last_tick.elapsed() >= tick_rate {
+            app.check_error_timeout();
+            last_tick = Instant::now();
         }
     }
 
-    // cleanup
-    execute!(stdout, terminal::LeaveAlternateScreen)?;
-    terminal::disable_raw_mode()?;
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture,
+    )?;
+    terminal.show_cursor()?;
+
     Ok(())
 }
