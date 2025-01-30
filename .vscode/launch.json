@@ -7,32 +7,9 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in library 'r_todo'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=r_todo"
-        ],
-        "filter": {
-          "name": "r_todo",
-          "kind": "lib"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
       "name": "Debug executable 'r_todo'",
       "cargo": {
-        "args": [
-          "build",
-          "--bin=r_todo",
-          "--package=r_todo"
-        ],
+        "args": ["build", "--bin=r_todo", "--package=r_todo"],
         "filter": {
           "name": "r_todo",
           "kind": "bin"
@@ -44,14 +21,23 @@
     {
       "type": "lldb",
       "request": "launch",
+      "name": "Debug unit tests in library 'r_todo'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=r_todo"],
+        "filter": {
+          "name": "r_todo",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
       "name": "Debug unit tests in executable 'r_todo'",
       "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=r_todo",
-          "--package=r_todo"
-        ],
+        "args": ["test", "--no-run", "--bin=r_todo", "--package=r_todo"],
         "filter": {
           "name": "r_todo",
           "kind": "bin"

@@ -1,11 +1,10 @@
 mod app;
 mod db;
 mod models;
+mod ui;
 
-use app::{
-    state::{App, InputMode},
-    ui,
-};
+use crate::models::todo::Priority;
+use app::state::{App, Mode};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -18,6 +17,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+use ui::edit_popup::{EditingState, InputFields, SelectableField};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize app with database
@@ -40,31 +40,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(20);
 
+    // main loop
     loop {
         // Draw the current state
-        terminal.draw(|f| ui::render(f, &app))?;
+        terminal.draw(|f| ui::todos::render(f, &app))?;
 
+        // we use a timeout function to periodically check if a user event has occurred
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
+        // poll for user events
         if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                match app.input_mode {
-                    InputMode::Normal => match key.code {
+                match app.mode {
+                    Mode::Normal => match key.code {
                         KeyCode::Char('q') => break,
                         KeyCode::Char('h') => app.show_help = !app.show_help,
+                        KeyCode::Char('n') => {
+                            app.selected_index = None;
+                            app.editing_state = EditingState {
+                                input_fields: InputFields {
+                                    text: String::new(),
+                                    priority: Some(Priority::Medium),
+                                },
+                                selected_field: Some(SelectableField::Text),
+                            };
+                            app.mode = Mode::Editing;
+                        }
                         KeyCode::Char('e') => {
                             if let Some(selected) = app.selected_index {
                                 if let Some(todo) = app.todos.get(selected) {
-                                    app.input = todo.text.clone();
-                                    app.input_mode = InputMode::Editing;
+                                    app.editing_state = EditingState {
+                                        input_fields: InputFields {
+                                            text: todo.text.clone(),
+                                            priority: todo.priority,
+                                        },
+                                        selected_field: Some(SelectableField::Text),
+                                    };
+                                    app.mode = Mode::Editing;
                                 }
                             }
-                        }
-                        KeyCode::Char('n') => {
-                            app.input_mode = InputMode::Editing;
-                            app.input.clear();
                         }
                         KeyCode::Char('d') => {
                             if let Some(selected) = app.selected_index {
@@ -85,11 +101,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
-                        KeyCode::Char('k') => {
+                        KeyCode::Up | KeyCode::Char('k') => {
                             app.selected_index = match app.selected_index {
                                 Some(i) => {
                                     if i > 0 {
-                                        Some(i - 1)
+                                        Some(i.saturating_sub(1))
                                     } else {
                                         Some(app.todos.len() - 1)
                                     }
@@ -97,11 +113,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 None => Some(0),
                             }
                         }
-                        KeyCode::Char('j') => {
+                        KeyCode::Down | KeyCode::Char('j') => {
                             app.selected_index = match app.selected_index {
                                 Some(i) => {
                                     if i + 1 < app.todos.len() {
-                                        Some(i + 1)
+                                        Some(i.saturating_add(1))
                                     } else {
                                         Some(0)
                                     }
@@ -111,35 +127,83 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         _ => {}
                     },
-                    InputMode::Editing => match key.code {
+                    Mode::Editing => match key.code {
+                        KeyCode::Char('1') | KeyCode::Char('h') => {
+                            if let Some(SelectableField::Priority) =
+                                app.editing_state.selected_field
+                            {
+                                app.editing_state.input_fields.priority = Some(Priority::High);
+                            }
+                        }
+                        KeyCode::Char('2') | KeyCode::Char('m') => {
+                            if let Some(SelectableField::Priority) =
+                                app.editing_state.selected_field
+                            {
+                                app.editing_state.input_fields.priority = Some(Priority::Medium);
+                            }
+                        }
+                        KeyCode::Char('3') | KeyCode::Char('l') => {
+                            if let Some(SelectableField::Priority) =
+                                app.editing_state.selected_field
+                            {
+                                app.editing_state.input_fields.priority = Some(Priority::Low);
+                            }
+                        }
+                        KeyCode::Char(c) => {
+                            if let Some(SelectableField::Text) = app.editing_state.selected_field {
+                                app.editing_state.input_fields.text.push(c);
+                            } else {
+                                continue;
+                            }
+                        }
+                        KeyCode::Backspace => {
+                            if let Some(SelectableField::Text) = app.editing_state.selected_field {
+                                app.editing_state.input_fields.text.pop();
+                            }
+                        }
+                        KeyCode::Tab => {
+                            app.editing_state.selected_field =
+                                match app.editing_state.selected_field {
+                                    Some(SelectableField::Text) => Some(SelectableField::Priority),
+                                    Some(SelectableField::Priority) => Some(SelectableField::Text),
+                                    None => Some(SelectableField::Text),
+                                };
+                        }
                         KeyCode::Enter => {
-                            if !app.input.is_empty() {
+                            if !app.editing_state.input_fields.text.is_empty() {
+                                let priority = app
+                                    .editing_state
+                                    .input_fields
+                                    .priority
+                                    .unwrap_or(Priority::Medium);
+
                                 if let Some(selected) = app.selected_index {
-                                    if let Err(e) =
-                                        app.update_todo_text(selected, app.input.clone())
-                                    {
+                                    if let Err(e) = app.update_todo(
+                                        selected,
+                                        app.editing_state.input_fields.text.clone(),
+                                        priority,
+                                    ) {
                                         app.set_error(format!("Failed to update todo: {}", e));
                                     }
                                 } else {
-                                    if let Err(e) = app.add_todo(app.input.clone()) {
+                                    if let Err(e) = app.add_todo(
+                                        app.editing_state.input_fields.text.clone(),
+                                        priority,
+                                    ) {
                                         app.set_error(format!("Failed to add todo: {}", e));
                                     }
                                 }
 
-                                app.input.clear();
-                                app.input_mode = InputMode::Normal;
+                                app.editing_state.input_fields.text.clear();
+                                app.editing_state.input_fields.priority = None;
+                                app.mode = Mode::Normal;
                                 terminal.clear()?;
                             }
                         }
-                        KeyCode::Char(c) => {
-                            app.input.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            app.input.pop();
-                        }
                         KeyCode::Esc => {
-                            app.input.clear();
-                            app.input_mode = InputMode::Normal;
+                            app.editing_state.input_fields.text.clear();
+                            app.editing_state.input_fields.priority = None;
+                            app.mode = Mode::Normal;
                         }
                         _ => {}
                     },
@@ -147,12 +211,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        // check if an error has been shown for too long
+        // and reset the timeout
         if last_tick.elapsed() >= tick_rate {
             app.check_error_timeout();
             last_tick = Instant::now();
         }
     }
 
+    // cleanup
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -164,6 +231,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// this project dir will be appropriate for respective OSs
 fn get_database_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let proj_dirs = ProjectDirs::from("com", "auxilia", "r_todo")
         .ok_or("Failed to determine project directories")?;

@@ -1,18 +1,22 @@
-use crate::{db::handler::DatabaseHandler, models::todo::Todo};
+use crate::{
+    db::handler::DatabaseHandler,
+    models::todo::{Priority, Todo},
+    ui::edit_popup::{EditingState, InputFields},
+};
 use chrono::Local;
 use ratatui::text::Line;
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Copy)]
-pub enum InputMode {
+#[derive(Eq, PartialEq)]
+pub enum Mode {
     Normal,
     Editing,
 }
 
 pub struct App {
     pub todos: Vec<Todo>,
-    pub input: String,
-    pub input_mode: InputMode,
+    pub mode: Mode,
+    pub editing_state: EditingState,
     pub selected_index: Option<usize>,
     pub show_help: bool,
     pub error_message: Option<Vec<String>>,
@@ -27,8 +31,14 @@ impl App {
 
         Ok(App {
             todos,
-            input: String::new(),
-            input_mode: InputMode::Normal,
+            mode: Mode::Normal,
+            editing_state: EditingState {
+                input_fields: InputFields {
+                    text: String::new(),
+                    priority: None,
+                },
+                selected_field: None,
+            },
             selected_index: Some(0),
             show_help: false,
             error_message: None,
@@ -38,8 +48,8 @@ impl App {
     }
 
     pub fn get_help_text(&self) -> Vec<Line<'_>> {
-        match self.input_mode {
-            InputMode::Normal => vec![
+        match self.mode {
+            Mode::Normal => vec![
                 Line::from("Normal Mode Commands:"),
                 Line::from("n - new todo"),
                 Line::from("e - edit selected todo"),
@@ -50,9 +60,10 @@ impl App {
                 Line::from("k/j - navigate todos"),
                 Line::from("q - quit application"),
             ],
-            InputMode::Editing => vec![
+            Mode::Editing => vec![
                 Line::from("Editing Mode Commands:"),
                 Line::from("type to enter todo text"),
+                Line::from("tab - edit next field"),
                 Line::from("enter - save todo"),
                 Line::from("esc - cancel editing"),
             ],
@@ -74,8 +85,13 @@ impl App {
         }
     }
 
-    pub fn add_todo(&mut self, text: String) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn add_todo(
+        &mut self,
+        text: String,
+        priority: Priority,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut todo = Todo::new(text);
+        todo.priority = Some(priority);
 
         match self.db.insert_todo(&todo) {
             Ok(id) => {
@@ -123,13 +139,15 @@ impl App {
         Ok(())
     }
 
-    pub fn update_todo_text(
+    pub fn update_todo(
         &mut self,
         index: usize,
         text: String,
+        priority: Priority,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(todo) = self.todos.get_mut(index) {
             todo.text = text;
+            todo.priority = Some(priority);
             self.db.update_todo(todo)?;
         }
         Ok(())

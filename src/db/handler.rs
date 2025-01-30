@@ -1,4 +1,4 @@
-use crate::models::todo::Todo;
+use crate::models::todo::{Priority, Todo};
 use chrono::{DateTime, Local};
 use rusqlite::{params, Connection, Result as SqlResult};
 use thiserror::Error;
@@ -19,6 +19,7 @@ pub struct DatabaseHandler {
 impl DatabaseHandler {
     pub fn new(db_path: &str) -> Result<Self, DatabaseError> {
         let conn = Connection::open(db_path)?;
+        println!("Connected to database: {}", db_path);
         let handler = DatabaseHandler { conn };
         handler.init_database()?;
         Ok(handler)
@@ -33,7 +34,8 @@ impl DatabaseHandler {
                 created_at DATETIME NOT NULL,
                 modified_at DATETIME,
                 completed_at DATETIME,
-                deleted_at DATETIME
+                deleted_at DATETIME,
+                priority INTEGER
             )",
             [],
         )?;
@@ -43,10 +45,10 @@ impl DatabaseHandler {
 
     pub fn load_todos(&self) -> Result<Vec<Todo>, DatabaseError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, text, completed, created_at, completed_at
+            "SELECT id, text, completed, created_at, completed_at, priority
              FROM todos
              WHERE deleted_at IS NULL
-             ORDER BY created_at DESC
+             ORDER BY priority DESC, created_at DESC
             ",
         )?;
 
@@ -57,6 +59,7 @@ impl DatabaseHandler {
                 completed: row.get(2)?,
                 created_at: row.get(3)?,
                 completed_at: row.get::<_, Option<DateTime<Local>>>(4)?,
+                priority: Self::int_to_priority(row.get(5)?),
             })
         })?;
 
@@ -65,12 +68,35 @@ impl DatabaseHandler {
             .map_err(DatabaseError::from)
     }
 
+    fn int_to_priority(priority: i64) -> Option<Priority> {
+        match priority {
+            3 => Some(Priority::Low),
+            2 => Some(Priority::Medium),
+            1 => Some(Priority::High),
+            _ => None,
+        }
+    }
+
+    fn priority_to_int(priority: Option<Priority>) -> i64 {
+        match priority {
+            Some(Priority::Low) => 3,
+            Some(Priority::Medium) => 2,
+            Some(Priority::High) => 1,
+            None => 0,
+        }
+    }
+
     pub fn insert_todo(&mut self, todo: &Todo) -> Result<i64, DatabaseError> {
         let tx = self.conn.transaction()?;
 
         tx.execute(
-            "INSERT INTO todos (text, completed, created_at) VALUES (?1, ?2, ?3)",
-            params![todo.text, todo.completed, todo.created_at],
+            "INSERT INTO todos (text, completed, created_at, priority) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                todo.text,
+                todo.completed,
+                todo.created_at,
+                Self::priority_to_int(todo.priority)
+            ],
         )?;
 
         let id = tx.last_insert_rowid();
@@ -86,13 +112,15 @@ impl DatabaseHandler {
              SET text = ?1,
                  completed = ?2,
                  modified_at = ?3,
-                 completed_at = ?4
-             WHERE id = ?5 AND deleted_at IS NULL",
+                 completed_at = ?4,
+                 priority = ?5
+             WHERE id = ?6 AND deleted_at IS NULL",
             params![
                 todo.text,
                 todo.completed,
                 Local::now(),
                 todo.completed_at,
+                Self::priority_to_int(todo.priority),
                 todo.id
             ],
         )?;

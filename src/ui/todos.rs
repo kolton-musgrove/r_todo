@@ -1,9 +1,10 @@
-use crate::app::state::{App, InputMode};
+use crate::app::state::App;
+use crate::ui::edit_popup::render as render_popup;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    style::{Color, Style, Stylize},
+    text::{Line, Text},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Frame,
 };
 
@@ -33,39 +34,40 @@ pub fn render(f: &mut Frame, app: &App) {
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, chunks[0]);
 
-    let todos: Vec<ListItem> = app
+    let todo_rows: Vec<Row> = app
         .todos
         .iter()
-        .enumerate()
-        .map(|(i, todo)| {
-            let style = if todo.completed {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::CROSSED_OUT)
-            } else {
-                Style::default().fg(Color::White)
-            };
-
-            let prefix = if Some(i) == app.selected_index {
-                "> "
-            } else {
-                " "
-            };
-
-            let line = Line::from(vec![
-                Span::raw(prefix),
-                Span::styled(
-                    format!("[{}] {}", if todo.completed { "x" } else { " " }, todo.text),
-                    style,
-                ),
-            ]);
-
-            ListItem::new(line)
+        .map(|todo| {
+            Row::new(vec![
+                Cell::from(todo.text.clone()),
+                Cell::from(format!("{}", todo.priority.unwrap())),
+                Cell::from(todo.completed.to_string()),
+            ])
+            .height(2)
         })
         .collect();
 
-    let todos_list = List::new(todos).block(Block::default().borders(Borders::ALL).title("Tasks"));
-    f.render_widget(todos_list, chunks[1]);
+    let widths = [
+        Constraint::Percentage(50),
+        Constraint::Percentage(30),
+        Constraint::Percentage(20),
+    ];
+
+    let todos = Table::new(todo_rows, widths)
+        .column_spacing(1)
+        .style(Style::default().fg(Color::White))
+        .header(
+            Row::new(vec!["Task", "Priority", "Completed"])
+                .style(Style::new().bold())
+                .bottom_margin(1),
+        )
+        .block(Block::default().borders(Borders::ALL).title("ToDos"))
+        .row_highlight_style(Style::default().fg(Color::Yellow))
+        .column_highlight_style(Style::default().fg(Color::Yellow))
+        .cell_highlight_style(Style::default().fg(Color::Yellow))
+        .highlight_symbol(">");
+
+    f.render_widget(todos, chunks[1]);
 
     let info_text = if app.show_help {
         app.get_help_text()
@@ -90,16 +92,5 @@ pub fn render(f: &mut Frame, app: &App) {
         f.render_widget(info, chunks[2]);
     }
 
-    let input = Paragraph::new(Text::from(app.input.as_str()))
-        .style(match app.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-        })
-        .block(Block::default().borders(Borders::ALL).title("Input"));
-
-    if app.show_help || app.error_message.is_some() {
-        f.render_widget(input, chunks[3]);
-    } else {
-        f.render_widget(input, chunks[2]);
-    }
+    render_popup(f, f.area(), &app.mode, &app.editing_state)
 }
