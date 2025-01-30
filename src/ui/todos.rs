@@ -1,41 +1,14 @@
-use crate::app::state::App;
-use crate::ui::edit_popup::render as render_popup;
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Rect},
     style::{Color, Style, Stylize},
-    text::{Line, Text},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Row, Table},
     Frame,
 };
 
-pub fn render(f: &mut Frame, app: &App) {
-    let constraints = if app.show_help || app.error_message.is_some() {
-        vec![
-            Constraint::Length(3),
-            Constraint::Min(10),
-            Constraint::Length(11),
-            Constraint::Length(3),
-        ]
-    } else {
-        vec![
-            Constraint::Length(3),
-            Constraint::Min(10),
-            Constraint::Length(3),
-        ]
-    };
+use crate::models::todo::Todo;
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(f.area());
-
-    let title = Paragraph::new(Text::from("r_Todo"))
-        .style(Style::default().fg(Color::Cyan))
-        .block(Block::default().borders(Borders::ALL));
-    f.render_widget(title, chunks[0]);
-
-    let todo_rows: Vec<Row> = app
-        .todos
+pub fn render(frame: &mut Frame, area: Rect, todos: &[Todo]) {
+    let todo_rows: Vec<Row> = todos
         .iter()
         .map(|todo| {
             Row::new(vec![
@@ -53,7 +26,7 @@ pub fn render(f: &mut Frame, app: &App) {
         Constraint::Percentage(20),
     ];
 
-    let todos = Table::new(todo_rows, widths)
+    let todos_table = Table::new(todo_rows, widths)
         .column_spacing(1)
         .style(Style::default().fg(Color::White))
         .header(
@@ -67,30 +40,5 @@ pub fn render(f: &mut Frame, app: &App) {
         .cell_highlight_style(Style::default().fg(Color::Yellow))
         .highlight_symbol(">");
 
-    f.render_widget(todos, chunks[1]);
-
-    let info_text = if app.show_help {
-        app.get_help_text()
-    } else if let Some(error) = &app.error_message {
-        error.iter().map(|e| Line::from(e.as_str())).collect()
-    } else {
-        vec![Line::from(String::new())]
-    };
-
-    let info_style = if app.show_help {
-        Style::default()
-    } else {
-        Style::default().fg(Color::Red)
-    };
-
-    let info_title = if app.show_help { "Help" } else { "Error" };
-
-    if app.show_help || app.error_message.is_some() {
-        let info = Paragraph::new(info_text)
-            .style(info_style)
-            .block(Block::default().borders(Borders::ALL).title(info_title));
-        f.render_widget(info, chunks[2]);
-    }
-
-    render_popup(f, f.area(), &app.mode, &app.editing_state)
+    frame.render_widget(todos_table, area);
 }

@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // main loop
     loop {
         // Draw the current state
-        terminal.draw(|f| ui::todos::render(f, &app))?;
+        terminal.draw(|f| ui::main::render(f, &app))?;
 
         // we use a timeout function to periodically check if a user event has occurred
         let timeout = tick_rate
