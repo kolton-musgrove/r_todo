@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table},
     Frame,
 };
@@ -12,26 +12,26 @@ pub fn render(frame: &mut Frame, area: Rect, todos: &[Todo]) {
         .iter()
         .map(|todo| {
             Row::new(vec![
+                Cell::from(if todo.completed { "[✓]" } else { "[ ]" }),
                 Cell::from(todo.text.clone()),
                 Cell::from(format!("{}", todo.priority.unwrap())),
-                Cell::from(todo.completed.to_string()),
             ])
             .height(2)
         })
         .collect();
 
     let widths = [
+        Constraint::Percentage(10),
         Constraint::Percentage(50),
-        Constraint::Percentage(30),
-        Constraint::Percentage(20),
+        Constraint::Percentage(40),
     ];
 
     let todos_table = Table::new(todo_rows, widths)
         .column_spacing(1)
         .style(Style::default().fg(Color::White))
         .header(
-            Row::new(vec!["Task", "Priority", "Completed"])
-                .style(Style::new().bold())
+            Row::new(vec!["Completed", "Task", "Priority"])
+                .style(Style::new().add_modifier(Modifier::BOLD))
                 .bottom_margin(1),
         )
         .block(Block::default().borders(Borders::ALL).title("ToDos"))
