@@ -1,13 +1,13 @@
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table},
+    style::{Style, Stylize},
+    widgets::{Block, Borders, Cell, HighlightSpacing, Row, Table, TableState},
     Frame,
 };
 
 use crate::models::todo::Todo;
 
-pub fn render(frame: &mut Frame, area: Rect, todos: &[Todo]) {
+pub fn render(frame: &mut Frame, area: Rect, table_state: &mut TableState, todos: &[Todo]) {
     let todo_rows: Vec<Row> = todos
         .iter()
         .map(|todo| {
@@ -28,17 +28,16 @@ pub fn render(frame: &mut Frame, area: Rect, todos: &[Todo]) {
 
     let todos_table = Table::new(todo_rows, widths)
         .column_spacing(1)
-        .style(Style::default().fg(Color::White))
+        .style(Style::new().white())
         .header(
             Row::new(vec!["Completed", "Task", "Priority"])
-                .style(Style::new().add_modifier(Modifier::BOLD))
+                .style(Style::new().bold())
                 .bottom_margin(1),
         )
         .block(Block::default().borders(Borders::ALL).title("ToDos"))
-        .row_highlight_style(Style::default().fg(Color::Yellow))
-        .column_highlight_style(Style::default().fg(Color::Yellow))
-        .cell_highlight_style(Style::default().fg(Color::Yellow))
-        .highlight_symbol(">");
+        .row_highlight_style(Style::new().yellow())
+        .highlight_symbol(">> ")
+        .highlight_spacing(HighlightSpacing::Always);
 
-    frame.render_widget(todos_table, area);
+    frame.render_stateful_widget(todos_table, area, table_state);
 }

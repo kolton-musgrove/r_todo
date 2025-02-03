@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // main loop
     loop {
         // Draw the current state
-        terminal.draw(|f| ui::main::render(f, &app))?;
+        terminal.draw(|f| ui::main::render(f, &mut app))?;
 
         // we use a timeout function to periodically check if a user event has occurred
         let timeout = tick_rate
@@ -58,7 +58,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Char('q') => break,
                         KeyCode::Char('h') => app.show_help = !app.show_help,
                         KeyCode::Char('n') => {
-                            app.selected_index = None;
                             app.editing_state = EditingState {
                                 input_fields: InputFields {
                                     text: String::new(),
@@ -69,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             app.mode = Mode::Editing;
                         }
                         KeyCode::Char('e') => {
-                            if let Some(selected) = app.selected_index {
+                            if let Some(selected) = app.table_state.selected() {
                                 if let Some(todo) = app.todos.get(selected) {
                                     app.editing_state = EditingState {
                                         input_fields: InputFields {
@@ -83,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                         KeyCode::Char('d') => {
-                            if let Some(selected) = app.selected_index {
+                            if let Some(selected) = app.table_state.selected() {
                                 if let Err(e) = app.delete_todo(selected) {
                                     app.set_error(format!("Failed to delete todo: {}", e));
                                 }
@@ -95,35 +94,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                         KeyCode::Char(' ') => {
-                            if let Some(selected) = app.selected_index {
+                            if let Some(selected) = app.table_state.selected() {
                                 if let Err(e) = app.toggle_todo(selected) {
                                     app.set_error(format!("Failed to toggle todo: {}", e));
                                 }
                             }
                         }
                         KeyCode::Up | KeyCode::Char('k') => {
-                            app.selected_index = match app.selected_index {
-                                Some(i) => {
-                                    if i > 0 {
-                                        Some(i.saturating_sub(1))
-                                    } else {
-                                        Some(app.todos.len() - 1)
-                                    }
-                                }
-                                None => Some(0),
-                            }
+                            app.select_previous();
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
-                            app.selected_index = match app.selected_index {
-                                Some(i) => {
-                                    if i + 1 < app.todos.len() {
-                                        Some(i.saturating_add(1))
-                                    } else {
-                                        Some(0)
-                                    }
-                                }
-                                None => Some(0),
-                            };
+                            app.select_next();
                         }
                         _ => {}
                     },
@@ -177,7 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .priority
                                     .unwrap_or(Priority::Medium);
 
-                                if let Some(selected) = app.selected_index {
+                                if let Some(selected) = app.table_state.selected() {
                                     if let Err(e) = app.update_todo(
                                         selected,
                                         app.editing_state.input_fields.text.clone(),

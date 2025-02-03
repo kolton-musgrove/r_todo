@@ -4,7 +4,7 @@ use crate::{
     ui::edit_popup::{EditingState, InputFields},
 };
 use chrono::Local;
-use ratatui::text::Line;
+use ratatui::{text::Line, widgets::TableState};
 use std::time::{Duration, Instant};
 
 #[derive(Eq, PartialEq)]
@@ -16,8 +16,8 @@ pub enum Mode {
 pub struct App {
     pub todos: Vec<Todo>,
     pub mode: Mode,
+    pub table_state: TableState,
     pub editing_state: EditingState,
-    pub selected_index: Option<usize>,
     pub show_help: bool,
     pub error_message: Option<Vec<String>>,
     pub error_shown_at: Option<Instant>,
@@ -32,6 +32,7 @@ impl App {
         Ok(App {
             todos,
             mode: Mode::Normal,
+            table_state: TableState::default().with_selected(0),
             editing_state: EditingState {
                 input_fields: InputFields {
                     text: String::new(),
@@ -39,7 +40,6 @@ impl App {
                 },
                 selected_field: None,
             },
-            selected_index: Some(0),
             show_help: false,
             error_message: None,
             error_shown_at: None,
@@ -125,7 +125,6 @@ impl App {
             let todo = &self.todos[index];
             self.db.delete_todo(todo.id)?;
             self.todos.remove(index);
-            self.update_selected_index();
         }
         Ok(())
     }
@@ -135,7 +134,6 @@ impl App {
             self.db.delete_todo(todo.id)?;
         }
         self.todos.retain(|todo| !todo.completed);
-        self.update_selected_index();
         Ok(())
     }
 
@@ -153,15 +151,33 @@ impl App {
         Ok(())
     }
 
-    fn update_selected_index(&mut self) {
-        if let Some(selected) = self.selected_index {
-            if selected >= self.todos.len() {
-                self.selected_index = if self.todos.is_empty() {
-                    None
+    pub fn select_next(&mut self) {
+        let i = match self.table_state.selected() {
+            Some(i) => {
+                if i >= self.todos.len().saturating_sub(1) {
+                    0
                 } else {
-                    Some(self.todos.len() - 1)
+                    i + 1
                 }
             }
-        }
+            None => 0,
+        };
+
+        self.table_state.select(Some(i));
+    }
+
+    pub fn select_previous(&mut self) {
+        let i = match self.table_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.todos.len().saturating_sub(1)
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+
+        self.table_state.select(Some(i));
     }
 }

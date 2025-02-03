@@ -10,7 +10,7 @@ use ratatui::{
     Frame,
 };
 
-pub fn render(f: &mut Frame, app: &App) {
+pub fn render(f: &mut Frame, app: &mut App) {
     let constraints = if app.show_help || app.error_message.is_some() {
         vec![
             Constraint::Length(3),
@@ -37,7 +37,7 @@ pub fn render(f: &mut Frame, app: &App) {
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, chunks[0]);
 
-    render_todos(f, chunks[1], &app.todos);
+    render_todos(f, chunks[1], &mut app.table_state, &app.todos);
     render_help_and_error(f, chunks[2], &app);
     render_popup(f, f.area(), &app.mode, &app.editing_state)
 }
