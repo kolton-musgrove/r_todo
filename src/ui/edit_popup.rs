@@ -5,8 +5,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::state::Mode;
-use crate::models::todo::Priority;
+use crate::{app::state::App, models::todo::Priority};
+use crate::{app::state::Mode, models::color_scheme::ColorScheme};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SelectableField {
@@ -24,11 +24,13 @@ pub struct InputFields {
     pub priority: Option<Priority>,
 }
 
-pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &EditingState) {
-    match mode {
+pub fn render(frame: &mut Frame, area: Rect, app: &App) {
+    let colors = ColorScheme::default();
+
+    match app.mode {
         Mode::Normal => return,
         Mode::Editing => {
-            let is_create = editing_state.input_fields.text.is_empty();
+            let is_create = app.editing_state.input_fields.text.is_empty();
             let title = if is_create {
                 "Create ToDo"
             } else {
@@ -45,7 +47,8 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
                 .title(title)
                 .style(Style::default())
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded);
+                .border_type(BorderType::Rounded)
+                .border_style(colors.accent);
 
             // create the layout for the input fields
             let chunks = Layout::default()
@@ -61,12 +64,12 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
             frame.render_widget(popup, popup_area);
 
             // render the text input
-            let text_style = match editing_state.selected_field {
-                Some(SelectableField::Text) => Style::default().yellow(),
+            let text_style = match app.editing_state.selected_field {
+                Some(SelectableField::Text) => Style::default().fg(colors.selection),
                 _ => Style::default(),
             };
 
-            let text_input = Paragraph::new(editing_state.input_fields.text.as_str())
+            let text_input = Paragraph::new(app.editing_state.input_fields.text.as_str())
                 .style(text_style)
                 .block(
                     Block::default()
@@ -81,8 +84,9 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
             let priority_items: Vec<ListItem> = priorities
                 .iter()
                 .map(|p| {
-                    let style = if editing_state.selected_field == Some(SelectableField::Priority)
-                        && Some(*p) == editing_state.input_fields.priority
+                    let style = if app.editing_state.selected_field
+                        == Some(SelectableField::Priority)
+                        && Some(*p) == app.editing_state.input_fields.priority
                     {
                         Style::default().yellow()
                     } else {
@@ -93,13 +97,20 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
                 })
                 .collect();
 
+            let priority_style = Block::default()
+                .title("Priority")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(
+                    if app.editing_state.selected_field == Some(SelectableField::Priority) {
+                        colors.selected_border()
+                    } else {
+                        Style::default()
+                    },
+                );
+
             let priority_list = List::new(priority_items)
-                .block(
-                    Block::default()
-                        .title("Priority")
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded),
-                )
+                .block(priority_style)
                 .highlight_style(Style::default().reversed());
 
             frame.render_widget(priority_list, chunks[1]);
