@@ -18,7 +18,6 @@ pub struct DatabaseHandler {
 impl DatabaseHandler {
     pub fn new(db_path: &str) -> Result<Self, DatabaseError> {
         let conn = Connection::open(db_path)?;
-        println!("Connected to database: {}", db_path);
         let handler = DatabaseHandler { conn };
         handler.init_database()?;
         Ok(handler)
@@ -47,7 +46,7 @@ impl DatabaseHandler {
             "SELECT id, text, completed, created_at, completed_at, priority
              FROM todos
              WHERE deleted_at IS NULL
-             ORDER BY priority DESC, created_at DESC
+             ORDER BY priority, created_at DESC
             ",
         )?;
 
