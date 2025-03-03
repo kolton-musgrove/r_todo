@@ -7,9 +7,8 @@ use thiserror::Error;
 pub enum DatabaseError {
     #[error("Failed to connect to database: {0}")]
     ConnectionError(#[from] rusqlite::Error),
-
-    #[error("Failed to exeute database operation: {0}")]
-    OperationError(String),
+    // #[error("Failed to exeute database operation: {0}")]
+    // OperationError(String),
 }
 
 pub struct DatabaseHandler {

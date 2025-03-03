@@ -36,6 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    let mut last_selected = 0;
 
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(20);
@@ -65,6 +66,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 },
                                 selected_field: Some(SelectableField::Text),
                             };
+                            last_selected = app.table_state.selected().unwrap_or(0);
+                            app.table_state.select(None);
                             app.mode = Mode::Editing;
                         }
                         KeyCode::Char('e') => {
@@ -109,30 +112,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         _ => {}
                     },
                     Mode::Editing => match key.code {
-                        KeyCode::Char('1') | KeyCode::Char('h') => {
-                            if let Some(SelectableField::Priority) =
-                                app.editing_state.selected_field
-                            {
-                                app.editing_state.input_fields.priority = Some(Priority::High);
-                            }
-                        }
-                        KeyCode::Char('2') | KeyCode::Char('m') => {
-                            if let Some(SelectableField::Priority) =
-                                app.editing_state.selected_field
-                            {
-                                app.editing_state.input_fields.priority = Some(Priority::Medium);
-                            }
-                        }
-                        KeyCode::Char('3') | KeyCode::Char('l') => {
-                            if let Some(SelectableField::Priority) =
-                                app.editing_state.selected_field
-                            {
-                                app.editing_state.input_fields.priority = Some(Priority::Low);
-                            }
-                        }
                         KeyCode::Char(c) => {
                             if let Some(SelectableField::Text) = app.editing_state.selected_field {
                                 app.editing_state.input_fields.text.push(c);
+                            } else if let Some(SelectableField::Priority) =
+                                app.editing_state.selected_field
+                            {
+                                if c == 'h' || c == '1' {
+                                    app.editing_state.input_fields.priority = Some(Priority::High);
+                                } else if c == 'm' || c == '2' {
+                                    app.editing_state.input_fields.priority =
+                                        Some(Priority::Medium);
+                                } else if c == 'l' || c == '3' {
+                                    app.editing_state.input_fields.priority = Some(Priority::Low);
+                                }
                             } else {
                                 continue;
                             }
@@ -173,6 +166,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     ) {
                                         app.set_error(format!("Failed to add todo: {}", e));
                                     }
+
+                                    app.table_state.select(Some(last_selected));
                                 }
 
                                 app.editing_state.input_fields.text.clear();
