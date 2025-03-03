@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Style, Stylize},
-    widgets::{Block, Borders, Cell, HighlightSpacing, Row, Table, TableState},
+    widgets::{Block, BorderType, Borders, Cell, HighlightSpacing, Row, Table, TableState},
     Frame,
 };
 
@@ -12,7 +12,7 @@ pub fn render(frame: &mut Frame, area: Rect, table_state: &mut TableState, todos
         .iter()
         .map(|todo| {
             Row::new(vec![
-                Cell::from(if todo.completed { "[✓]" } else { "[ ]" }),
+                Cell::from(if todo.completed { "(✓)" } else { "( )" }),
                 Cell::from(todo.text.clone()),
                 Cell::from(format!("{}", todo.priority.unwrap())),
             ])
@@ -34,7 +34,12 @@ pub fn render(frame: &mut Frame, area: Rect, table_state: &mut TableState, todos
                 .style(Style::new().bold())
                 .bottom_margin(1),
         )
-        .block(Block::default().borders(Borders::ALL).title("ToDos"))
+        .block(
+            Block::default()
+                .title("TODOs")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
         .row_highlight_style(Style::new().yellow())
         .highlight_symbol(">> ")
         .highlight_spacing(HighlightSpacing::Always);

@@ -2,7 +2,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::Line,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Padding, Paragraph},
     Frame,
 };
 
@@ -26,9 +26,13 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let info_title = if app.show_help { "Help" } else { "Error" };
 
     if app.show_help || app.error_message.is_some() {
-        let info = Paragraph::new(info_text)
-            .style(info_style)
-            .block(Block::default().borders(Borders::ALL).title(info_title));
+        let info = Paragraph::new(info_text).style(info_style).block(
+            Block::default()
+                .title(info_title)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .padding(Padding::left(1)),
+        );
         frame.render_widget(info, area);
     }
 }

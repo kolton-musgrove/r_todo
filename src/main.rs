@@ -118,6 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else if let Some(SelectableField::Priority) =
                                 app.editing_state.selected_field
                             {
+                                // allow the user to set the priority directly
                                 if c == 'h' || c == '1' {
                                     app.editing_state.input_fields.priority = Some(Priority::High);
                                 } else if c == 'm' || c == '2' {
@@ -125,6 +126,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         Some(Priority::Medium);
                                 } else if c == 'l' || c == '3' {
                                     app.editing_state.input_fields.priority = Some(Priority::Low);
+                                }
+
+                                // allow the user to naviagate through the priority options
+                                if c == 'j' {
+                                    let current = app
+                                        .editing_state
+                                        .input_fields
+                                        .priority
+                                        .unwrap_or(Priority::Medium);
+                                    let next = match current {
+                                        Priority::High => Priority::Medium,
+                                        Priority::Medium => Priority::Low,
+                                        Priority::Low => Priority::High,
+                                    };
+                                    app.editing_state.input_fields.priority = Some(next);
+                                } else if c == 'k' {
+                                    let current = app
+                                        .editing_state
+                                        .input_fields
+                                        .priority
+                                        .unwrap_or(Priority::Medium);
+                                    let next = match current {
+                                        Priority::High => Priority::Low,
+                                        Priority::Medium => Priority::High,
+                                        Priority::Low => Priority::Medium,
+                                    };
+                                    app.editing_state.input_fields.priority = Some(next);
                                 }
                             } else {
                                 continue;

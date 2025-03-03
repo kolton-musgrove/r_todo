@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -42,9 +42,10 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
 
             // create the outer popup block
             let popup = Block::default()
-                .borders(Borders::ALL)
                 .title(title)
-                .style(Style::default());
+                .style(Style::default())
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
 
             // create the layout for the input fields
             let chunks = Layout::default()
@@ -67,7 +68,12 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
 
             let text_input = Paragraph::new(editing_state.input_fields.text.as_str())
                 .style(text_style)
-                .block(Block::default().borders(Borders::ALL).title(title));
+                .block(
+                    Block::default()
+                        .title("Todo")
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded),
+                );
             frame.render_widget(text_input, chunks[0]);
 
             // render the priority input
@@ -88,7 +94,12 @@ pub fn render(frame: &mut Frame, area: Rect, mode: &Mode, editing_state: &Editin
                 .collect();
 
             let priority_list = List::new(priority_items)
-                .block(Block::default().borders(Borders::ALL).title("Priority"))
+                .block(
+                    Block::default()
+                        .title("Priority")
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded),
+                )
                 .highlight_style(Style::default().reversed());
 
             frame.render_widget(priority_list, chunks[1]);
