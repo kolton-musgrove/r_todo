@@ -13,11 +13,20 @@ pub enum Mode {
     Editing,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SortCriteria {
+    Priority,
+    Completed,
+    CreatedDate,
+}
+
 pub struct App {
     pub todos: Vec<Todo>,
     pub mode: Mode,
     pub table_state: TableState,
     pub editing_state: EditingState,
+    pub sort_by: SortCriteria,
+    pub sort_asc: bool,
     pub show_help: bool,
     pub error_message: Option<Vec<String>>,
     pub error_shown_at: Option<Instant>,
@@ -40,6 +49,8 @@ impl App {
                 },
                 selected_field: None,
             },
+            sort_by: SortCriteria::Priority,
+            sort_asc: true,
             show_help: false,
             error_message: None,
             error_shown_at: None,
@@ -149,6 +160,50 @@ impl App {
             self.db.update_todo(todo)?;
         }
         Ok(())
+    }
+
+    pub fn sort_todos(&mut self) {
+        match self.sort_by {
+            SortCriteria::Priority => self.todos.sort_by(|a, b| {
+                let ordering = a.priority.unwrap().cmp(&b.priority.unwrap());
+                if self.sort_asc {
+                    ordering
+                } else {
+                    ordering.reverse()
+                }
+            }),
+            SortCriteria::Completed => self.todos.sort_by(|a, b| {
+                let ordering = a.completed.cmp(&b.completed);
+                if self.sort_asc {
+                    ordering
+                } else {
+                    ordering.reverse()
+                }
+            }),
+            SortCriteria::CreatedDate => self.todos.sort_by(|a, b| {
+                let ordering = a.created_at.cmp(&b.created_at);
+                if self.sort_asc {
+                    ordering
+                } else {
+                    ordering.reverse()
+                }
+            }),
+        }
+    }
+
+    pub fn toggle_sort_direction(&mut self) {
+        self.sort_asc = !self.sort_asc;
+    }
+
+    pub fn set_sort_criteria(&mut self, criteria: SortCriteria) {
+        if self.sort_by == criteria {
+            self.toggle_sort_direction();
+            self.sort_todos();
+        } else {
+            self.sort_by = criteria;
+            self.sort_asc = true;
+            self.sort_todos();
+        }
     }
 
     pub fn select_next(&mut self) {

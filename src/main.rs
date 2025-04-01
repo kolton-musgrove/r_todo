@@ -4,7 +4,7 @@ mod models;
 mod ui;
 
 use crate::models::todo::Priority;
-use app::state::{App, Mode};
+use app::state::{App, Mode, SortCriteria};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -108,6 +108,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
                             app.select_next();
+                        }
+                        KeyCode::Char('p') => {
+                            app.set_sort_criteria(SortCriteria::Priority);
+                        }
+                        KeyCode::Char('t') => {
+                            app.set_sort_criteria(SortCriteria::CreatedDate);
+                        }
+                        KeyCode::Char('s') => {
+                            app.set_sort_criteria(SortCriteria::Completed);
+                        }
+                        KeyCode::Char('r') => {
+                            app.toggle_sort_direction();
+                            app.sort_todos();
                         }
                         _ => {}
                     },

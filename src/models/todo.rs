@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use std::fmt::Display;
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
     Low,
     Medium,
